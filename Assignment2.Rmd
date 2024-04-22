@@ -1,0 +1,27 @@
+---
+title: "Assignment 2"
+author: '31994695'
+date: "2024-04-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+
+```{r}
+rm(list = ls())
+Phish <- read.csv("PhishingData.csv")
+set.seed(31994695) # Your Student ID is the random seed
+L <- as.data.frame(c(1:50))
+L <- L[sample(nrow(L), 10, replace = FALSE),]
+Phish <- Phish[(Phish$A01 %in% L),]
+PD <- Phish[sample(nrow(Phish), 2000, replace = FALSE),] # sample of 2000 rows
+
+
+head(PD)
+```
+
