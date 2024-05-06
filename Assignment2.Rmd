@@ -10,18 +10,116 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## R Markdown
+```{r}
+library(tree)
+library(e1071)
+library(ROCR)
+library(rpart)
+library(rgl)
+library(adabag)
+library(ipred)
+```
 
 
 ```{r}
-rm(list = ls())
 Phish <- read.csv("PhishingData.csv")
 set.seed(31994695) # Your Student ID is the random seed
 L <- as.data.frame(c(1:50))
 L <- L[sample(nrow(L), 10, replace = FALSE),]
 Phish <- Phish[(Phish$A01 %in% L),]
-PD <- Phish[sample(nrow(Phish), 2000, replace = FALSE),] # sample of 2000 rows
+PD <- Phish[sample(nrow(Phish), 2000, replace = FALSE),]
+PD
+```
+```{r}
+# Question 1
+dim(PD)
 
 
-head(PD)
+table(PD$Class)
+# we can get 0 is 1438 and 1 is 562
+
+count_0 <- sum(PD$Class == 0)
+count_1 <- sum(PD$Class == 1)
+
+# checking the ratio
+ratio_0 <- count_0 / length(PD$Class)
+ratio_1 <- count_1 / length(PD$Class)
+cat("Ratio of Class 0:", ratio_0, "\n")
+cat("Ratio of Class 1:", ratio_1, "\n")
+
+proportion <- count_1 / count_0
+proportion
+
+# making bar plot
+barplot(c(ratio_0, ratio_1), names.arg = c("Class 0", "Class 1"), ylim = c(0,1),
+        main = "Ratio of Class 0 and Class 1", ylab = "Ratio", col = c("skyblue", "salmon"))
+
+summary(PD)
+```
+1 - 1. The proportion of phishing sites to legitimate sites
+  The proportion of phishing sites to legitimate sites is 0.3908206, meaning that 전체 사이트 중에서 39.08% 가 사기 사이트이고, 나머지는 정상 사이트라는 것을 알 수 있었다.
+2 - 1. Descriptions of the predictor (independent) variables
+  `summary(PD)` 를 통해서, 우리는 각각의 predictor variables 의 최대,최소 그리고 평균 값을 알 수 있었다. noteworthy 한 데이터를 찾기 위해서는 최댓값과 최솟값의 차이가 가장 크게 나는 attribute가 조금 중요하지 않을까 생각하기도 했다.
+3 - 1. Considering omitting from my data analysis
+  만약 NA 가 들어가는 열이 있다면, 그 데이터를 제외하고 데이터를 분석해야 한다고 계획했다.
+  
+```{r}
+# Question 2
+
+# NA가 하나라도 있는 열을 제외한 데이터프레임 생성
+PD_filtered <- PD[complete.cases(PD), ]
+
+dim(PD_filtered)
+
+```
+  
+  1. 먼저, 나는 NA 가 들어가는 모든 열을 먼저 제외했다. 그리고 나서 `dim(PD_filtered)` 를 확인해보니 1575, 26 의 결과를 얻을 수 있었다.
+    
+
+```{r}
+# Question 3
+
+set.seed(31994695)
+train.row = sample(1:nrow(PD_filtered), 0.7*nrow(PD_filtered))
+PD.train = PD_filtered[train.row,]
+PD.test = PD_filtered[-train.row,]
+```
+
+
+```{r}
+# Question 4
+
+# Implementing - Decision Tree
+set.seed(31994695)
+PD.tree.fit = tree(A01~ .-Class, data = PD.train)
+summary(PD.tree.fit)
+# plot() 함수를 사용하여 그래프 생성
+plot(PD.tree.fit)
+
+# text() 함수를 사용하여 텍스트 추가
+text(PD.tree.fit, pretty = 0)
+
+# Naive Bayes
+set.seed(31994695)
+
+PD.nav.fit = naiveBayes(A01~.,-Class,data = PD.train)
+
+# Bagging
+set.seed(31994695)  
+sub <- sample(1:nrow(PD.train), 750, replace = FALSE)
+
+#fitting the model (number of trees is 10)
+PD.ibag.fit = bagging(Class ~ ., data = PD.train[sub,],mfinal = 10)
+
+# test the model by making prediction from the test set
+PD.ibpred <- predict(PD.ibag.fit, newdata = PD.train[-sub, ])
+table(observed = PD.ibag.fit[-sub,5],predicted = PD.ibpred$Class)
+
+
+# Boosting
+
+# Random Forest
+
+
 ```
 
