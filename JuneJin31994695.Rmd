@@ -1,0 +1,912 @@
+---
+title: "FIT3152_Assignment2"
+author: '31994695'
+date: "2024-05-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+My student ID is 31994695. However, there was some unexpected happening with classifier such as every node leads to zero. The lecturer adviced me to change seeds. Therefore, I used my seeds as 319946955.
+
+I didn't use any AI to generate any materials / content in this assignment.
+
+
+```{r echo=FALSE, results='hide', message=FALSE, warning=FALSE}
+library(tree)
+library(e1071)
+library(ROCR)
+library(rpart)
+library(rgl)
+library(plyr)
+library(adabag)
+library(randomForest)
+library(caret)
+library(ggplot2)
+#library(neuralnet)
+
+rm(list = ls())
+Phish <- read.csv("PhishingData.csv")
+set.seed(319946955) # Your Student ID is the random seed
+L <- as.data.frame(c(1:50))
+L <- L[sample(nrow(L), 10, replace = FALSE),]
+Phish <- Phish[(Phish$A01 %in% L),]
+PD <- Phish[sample(nrow(Phish), 2000, replace = FALSE),] # sample of 2000 rows
+
+```
+
+# Question 1
+
+```{r echo=FALSE}
+# Question 1
+
+count_0 <- sum(PD$Class == 0)
+count_1 <- sum(PD$Class == 1)
+
+# checking the ratio
+ratio_0 <- count_0 / length(PD$Class)
+ratio_1 <- count_1 / length(PD$Class)
+cat("Ratio of Class 1 (proportion of phishing sites to legitimate sites) :", ratio_1, "\n")
+
+# making bar plot
+barplot(c(ratio_0, ratio_1), names.arg = c("Class 0", "Class 1"), ylim = c(0,1),
+        main = "Ratio of Class 0 and Class 1", ylab = "Ratio", col = c("skyblue", "salmon"))
+
+```
+
+
+There were a total of 2000 rows and 26 columns in the dataset. Among the 2000 sites, 582 were phishing sites and 1418 were legitimate sites. (Phishing sites were represented as 1, and legitimate sites as 0.) Therefore, the proportion of phishing sites is 582/2000, which corresponds to 29.1% of the total.
+
+
+```{r echo=FALSE, results='hide'}
+summary(PD)
+```
+
+I could see the mean, and median values of each attributes from the data. However, I couldn't notice about the anything noteworthy in the data. I concluded that it will be available to find noteworthy data only after implementing classifier.
+
+# Question 2
+
+```{r}
+# Question 2, pre-proessing
+
+PD_filtered <- PD[complete.cases(PD), ]
+PD_filtered$Class <- as.factor(PD_filtered$Class)
+
+dim(PD_filtered)
+
+```
+First, to make accurate predictions, I excluded all columns with missing values (NA). Consequently, the shape of PD_filtered changed to 1605 rows and 26 columns from the original 2000 rows. This indicates that a total of 395 rows were removed due to the exclusion of columns with NA values.
+
+Furthermore, I converted the Class attribute into a factor.
+
+# Question 3
+
+I divided my data into a 70% training and 30% test set by adapting the following code.
+The code is from Assignment instruction, with my student ID seeds.
+
+```{r}
+# Question 3
+set.seed(319946955)
+train.row = sample(1:nrow(PD_filtered), 0.7*nrow(PD_filtered))
+PD.train = PD_filtered[train.row,]
+PD.test = PD_filtered[-train.row,]
+```
+
+
+# Question 4
+
+Implementing a classification model for each techniques.
+```{r}
+# Question 4
+
+# Decision Tree
+set.seed(319946955)
+PD.tree = tree(Class ~., data = PD.train)
+
+# Naive Bayes
+set.seed(319946955)
+PD.nav = naiveBayes(Class ~ . , data = PD.train)
+
+set.seed(319946955)  
+sub <- sample(1:nrow(PD.train), 750, replace = FALSE)
+
+# Bagging 
+set.seed(319946955)  
+PD.bag = bagging(Class ~ ., data = PD.train, mfinal = 10)
+
+# Boosting
+set.seed(319946955)  
+PD.boost <- boosting(Class ~ ., data = PD.train, mfinal = 10)
+
+# Random Forest
+set.seed(319946955)  
+PD.randomforest <- randomForest(Class ~., data=PD.train )
+
+```
+# Question 5 
+Decision Tree confusion matrix
+
+```{r echo = FALSE}
+# Question 5
+
+# Decision Tree
+PD.tree.predict <- predict(PD.tree, PD.test, type = "class")
+PD.tree.conf_matrix <- confusionMatrix(data = PD.tree.predict, reference = PD.test$Class)
+
+PD.tree.conf_matrix
+
+PD.tree.accuracy <- PD.tree.conf_matrix$overall["Accuracy"]
+
+```
+Naive Bayes confusion matrix
+```{r echo = FALSE}
+# Naive Bayes
+PD.nav.predict <- predict(PD.nav, PD.test)
+PD.nav.conf_matrix_nb <- confusionMatrix(data = PD.nav.predict, reference = PD.test$Class)
+
+PD.nav.conf_matrix_nb
+
+PD.nav.accuracy <- PD.nav.conf_matrix_nb$overall["Accuracy"]
+```
+Bagging confusion matrix
+```{r echo= FALSE}
+# Bagging
+PD.bag.predict <- predict.bagging(PD.bag, newdata = PD.test)
+PD.bag.predict_factor <- factor(PD.bag.predict$class, levels = levels(PD.test$Class))
+PD.bag.conf_matrix <- confusionMatrix(data = PD.bag.predict_factor, reference = PD.test$Class)
+
+PD.bag.conf_matrix
+
+PD.bag.accuracy <- PD.bag.conf_matrix$overall["Accuracy"]
+```
+Boosting confusion matrix
+```{r echo=FALSE}
+# Boosting 
+PD.boost.predict <- predict.boosting(PD.boost, newdata = PD.test)
+PD.boost.predict_factor <- factor(PD.boost.predict$class, levels = levels(PD.test$Class))
+PD.boost.conf_matrix <- confusionMatrix(data = PD.boost.predict_factor, reference = PD.test$Class)
+PD.boost.accuracy <- PD.boost.conf_matrix$overall["Accuracy"]
+
+PD.boost.conf_matrix
+```
+Random Forest confusion matrix
+```{r echo=FALSE}
+# Random forest
+PD.randomforest.predict <- predict(PD.randomforest,PD.test)
+PD.randomforest.conf_matrix <- confusionMatrix(data = PD.randomforest.predict, reference = PD.test$Class)
+
+PD.randomforest.conf_matrix
+
+PD.randomforest.accuracy <- PD.randomforest.conf_matrix$overall["Accuracy"]
+```
+
+```{r echo=FALSE}
+classifiers_name <- c("Decision Tree", "Naive Bayes", "Bagging", "Boosting", "Random Forest")
+accuracy_of_classifiers <- c(PD.tree.accuracy,
+                             PD.nav.accuracy,
+                             PD.bag.accuracy,
+                             PD.boost.accuracy,
+                             PD.randomforest.accuracy)
+accuracy_of_classifiers_rounded <- round(accuracy_of_classifiers, 4)
+classifier_table <- data.frame(Classifier = classifiers_name, Accuracy = accuracy_of_classifiers_rounded)
+
+classifier_table
+classifier_table_copy = classifier_table
+```
+# Question 6 
+
+```{r}
+# Question 6 
+PD.tree.confidence <- PD.tree.conf_matrix$byClass
+PD.tree.sensitivity <- PD.tree.confidence["Sensitivity"]
+
+PD.pred.tree <- predict(PD.tree,PD.test,type = "vector")
+PDT.pred <- prediction(PD.pred.tree[,2], PD.test$Class) 
+PDT.perf <- performance(PDT.pred,"tpr","fpr")
+
+#AUC - Decision Tree
+PD.tree.auc_value <- performance(PDT.pred, "auc")
+PD.tree.auc <- PD.tree.auc_value@y.values[[1]]
+cat("Deicions Tree AUC: ", PD.tree.auc )
+
+plot(PDT.perf, col = "lightpink")
+title("Performance of Different Models")
+abline(0,1)
+
+# Naive Bayes
+PD.nav.confidence <- PD.nav.conf_matrix_nb$byClass
+PD.nav.sensitivity <- PD.nav.confidence["Sensitivity"]
+
+PD.pred.bayes <- predict(PD.nav,PD.test,type = "raw")
+PDN.pred <- prediction (PD.pred.bayes[,2], PD.test$Class)
+PDN.perf <- performance(PDN.pred,"tpr","fpr")
+
+#AUC - Naive Bayes
+PD.nav.auc_value <- performance(PDN.pred, "auc")
+PD.nav.auc <- PD.nav.auc_value@y.values[[1]]
+cat("Naive Bayes AUC: ", PD.nav.auc)
+
+plot(PDN.perf, add=TRUE, col = "blueviolet")
+
+# Bagging 
+PD.bag.confidence <- PD.bag.conf_matrix$byClass
+PD.bag.sensitivity <- PD.bag.confidence["Sensitivity"]
+
+PDBA.pred <- prediction(PD.bag.predict$prob[,2], PD.test$Class)
+PDBA.perf <- performance(PDBA.pred,"tpr","fpr")
+
+#AUC - Bagging
+PDBA.auc_value <- performance(PDBA.pred, "auc")
+PDBA.auc <- PDBA.auc_value@y.values[[1]]
+cat("Bagging AUC: ", PDBA.auc )
+
+
+plot(PDBA.perf, add=TRUE, col = "darkblue")
+
+# Boosting
+PD.boost.confidence <- PD.boost.conf_matrix$byClass
+PD.boost.sensitivity <- PD.boost.confidence["Sensitivity"]
+PD.pred.boost <- predict.boosting(PD.boost,PD.test, mfinal = 10)
+PDBO.pred <- prediction(PD.pred.boost$prob[,2], PD.test$Class)
+PDBO.perf <- performance(PDBO.pred,"tpr","fpr")
+
+#AUC - Boosting
+PDBO.auc_value <- performance(PDBO.pred, "auc")
+PDBO.auc <- PDBO.auc_value@y.values[[1]]
+cat("Boosting AUC:" , PDBO.auc )
+
+plot(PDBO.perf, add=TRUE, col = "red")
+
+# Random Forest
+PD.randomforest.confidence <- PD.randomforest.conf_matrix$byClass
+PD.randomforest.sensitivity <- PD.randomforest.confidence["Sensitivity"]
+PD.pred.rf <- predict(PD.randomforest, PD.test, type="prob")
+PDRF.pred <- prediction (PD.pred.rf[,2],PD.test$Class)
+PDRF.perf <- performance(PDRF.pred, "tpr","fpr")
+
+#AUC - Random Forest
+PDRF.auc_value <- performance(PDRF.pred, "auc")
+PDRF.auc <- PDRF.auc_value@y.values[[1]]
+cat("Random Forest AUC: ", PDRF.auc )
+
+plot(PDRF.perf, add=TRUE, col = "darkgreen")
+
+legend_text <- c("Decision Tree", "Naive Bayes", "Bagging", "Boosting", "Random Forest")
+legend("bottomright", legend=legend_text, col=c("lightpink", "blueviolet", "darkblue", "red", "darkgreen"), lty=1, lwd=2)
+
+```
+
+
+To calculate the confidence of predicting phishing for each case, I computed the True Positive Rate (TPR), also known as sensitivity or recall.
+
+The results are as follows:
+
+Decision Tree AUC: 0.7499554
+Naive Bayes AUC:0.7089576
+Bagging  AUC:0.7293785
+Boosting AUC:0.7866172
+Random Forest AUC:0.783184
+
+Decision Tree Confidence (Sensitivity): 0.9185393
+Naive Bayes Confidence (Sensitivity): 0.8539326
+Bagging Confidence (Sensitivity): 0.9466292
+Boosting Confidence (Sensitivity): 0.8848315
+Random Forest Confidence (Sensitivity): 0.9466292
+
+Hence, the classifiers with the highest confidence are Random Forest and Bagging.
+
+Additionally, I ploted the ROC curve with different colors for each classifier.
+
+# Question 7
+```{r echo=FALSE}
+
+classifiers_name <- c("Decision Tree", "Naive Bayes", "Bagging", "Boosting", "Random Forest")
+accuracy_of_classifiers <- c(PD.tree.accuracy,
+                             PD.nav.accuracy,
+                             PD.bag.accuracy,
+                             PD.boost.accuracy,
+                             PD.randomforest.accuracy)
+confidence_of_classifiers <- c(PD.tree.sensitivity,
+                               PD.nav.sensitivity,
+                               PD.bag.sensitivity,
+                               PD.boost.sensitivity,
+                               PD.randomforest.sensitivity)
+AUC_table <- c(PD.tree.auc,
+                               PD.nav.auc,
+                               PDBA.auc,
+                               PDBO.auc,
+                               PDRF.auc)
+accuracy_of_classifiers_rounded <- round(accuracy_of_classifiers, 4)
+confidence_of_classifiers_rounded <- round(confidence_of_classifiers, 4)
+classifier_table <- data.frame(Classifier = classifiers_name,
+                               Accuracy = accuracy_of_classifiers_rounded,
+                               Confidence = confidence_of_classifiers_rounded,
+                               AUC = AUC_table)
+
+
+classifier_table
+```
+Through the confusion matrix of each of the 5 classifiers, it is evident that Bagging achieved the highest accuracy of 0.8133. Additionally, Bagging demonstrated the highest confidence at 0.9466 among the other classifiers. However, improving other classifiers may lead to better performance than the improvement seen in Bagging. Therefore, while Bagging can currently be considered the "best" classifier, it cannot be definitively confirmed based solely on accuracy.
+
+
+# Question 8
+
+```{r}
+# Decision Tree
+summary(PD.tree)
+```
+Variables actually used in tree construction: "A01" "A23" "A22"
+
+```{r}
+# Bagging 
+PD.bag$importance
+```
+
+most important variables : A01, 49.5053 | A23, 29.6782 | A22, 08.5829
+the variables could be omitted from the data : A03, A04, A05, A07, A09, A10, A11, A13, A15, A16, A19, A20, A21, A25
+
+```{r}
+# Boosting
+PD.boost$importance
+```
+most important variables : A01, 31.0082 | A22, 15.8626 | A23, 14.7768 
+the variables could be omitted from the data : A03, A05, A07, A09, A11, A13, A16, A19
+
+
+```{r}
+# Random Forest 
+PD.randomforest$importance
+```
+
+most important variables : A01, 91.4770 | A23, 68.1270 | A22, 64.2624 
+the variables could be omitted from the data : A03
+
+The criterion for determining which variables could be omitted considered those with an importance score of 0.
+
+# Question 9
+
+```{r echo=FALSE}
+# Question 9
+
+PD.new.train <- PD.train[, c(1, 22, 23, 18, 26)] 
+PD.new.test <- PD.test[, c(1, 22, 23, 18, 26)] 
+
+
+set.seed(319946955)
+PD.new.tree <-tree(Class ~., data = PD.new.train)
+
+plot(PD.new.tree)
+text(PD.new.tree)
+title(main = "New Decision Tree")
+
+# Decision Tree
+PD.new.tree.predict <- predict(PD.new.tree, PD.new.test, type = "class")
+PD.new.tree.conf_matrix <- confusionMatrix(data = PD.new.tree.predict, reference = PD.new.test$Class)
+
+PD.new.tree.conf_matrix
+
+PD.new.tree.accuracy <- PD.new.tree.conf_matrix$overall["Accuracy"]
+print(paste("NEW Decision Tree Accuracy:", PD.new.tree.accuracy))
+
+
+```
+I implemented a Decision Tree diagram for Question 4, considering A01, A23, and A22 attributes as they are deemed most crucial for classifying phishing or legitimate sites. 
+
+This Decision Tree achieves an accuracy of 0.7946 and a sensitivity of 0.9185 (as referenced in Question 5). Additionally, I confirmed that PD.tree.auc is 0.7499554 in Question 6.
+
+
+# Question 10
+
+```{r}
+# Question 10
+set.seed(319946955)  
+test.PD.tree.fit <- cv.tree(PD.tree, FUN = prune.misclass)
+
+test.PD.tree.fit
+```
+
+Size 6 Tree is same with our original decision tree, so I tried pruning with best= 4.
+
+```{r echo=FALSE}
+PD.tree.prune <- prune.misclass(PD.tree, best = 4)
+
+summary(PD.tree.prune)
+
+plot(PD.tree.prune)
+text(PD.tree.prune,pretty=0)
+title("Pruned Decision Tree")
+```
+
+
+```{r}
+set.seed(319946955) 
+
+# Pruned Decision Tree prediction
+PD.tree.prune.predict <- predict(PD.tree.prune, PD.test, type = "class")
+PD.tree.prune.confusion_matrix <- table(actual = PD.test$Class, predicted = PD.tree.prune.predict)
+PD.tree.prune.accuracy <- sum(diag(PD.tree.prune.confusion_matrix)) / sum(PD.tree.prune.confusion_matrix)
+print(PD.tree.prune.accuracy)
+
+# Pruned Decision Tree performance check and confusion matrix
+PD.tree.prune.predict <- predict(PD.tree.prune, PD.test, type = "class")
+PD.tree.prune.conf_matrix <- confusionMatrix(data = PD.tree.prune.predict, reference = PD.test$Class)
+
+# Pruned Decision Tree ROC and AUC
+PD.pred.tree.prune <- predict(PD.tree.prune, PD.test, type = "vector")
+PDT.prune.pred <- prediction(PD.pred.tree.prune[,2], PD.test$Class)
+PDT.prune.perf <- performance(PDT.prune.pred, "tpr", "fpr")
+
+# AUC - Pruned Decision Tree
+PD.tree.prune.auc_value <- performance(PDT.prune.pred, "auc")
+PD.tree.prune.auc <- PD.tree.prune.auc_value@y.values[[1]]
+PD.tree.prune.auc
+
+plot(PDT.prune.perf, col = "lightpink", main = "Performance of Different Models")
+plot(PDN.perf, add = TRUE, col = "skyblue")
+abline(0, 1, lty = 2)
+legend("bottomright", legend = c("Pruned Decision Tree", "Original Decision Tree"), col = c("lightpink", "skyblue"), lwd = 2)
+
+```
+
+Initially, I chose the decision tree, believing that if improved, it could potentially surpass the accuracy of bagging. After checking "prune" and "cross-validation," the decision tree indeed showed some improvement, with an accuracy score of 0.8008, slightly higher than the original 0.7946. However, it was still lower than the accuracy achieved by bagging classification, which was the highest. Therefore, I opted for bagging as the best tree-based classifier and strived to further enhance it.
+
+
+```{r echo=FALSE}
+# Question 10 - Gridsearch
+
+# initialize the hyperparameters value
+hyperparameters <- data.frame(cp = c(0.01, 0.05, 0.1, 0.2, 0.5))
+
+# how are we going to do the train
+ctrl <- trainControl(method = "cv", number = 5)
+
+# gridsearch
+model <- train(Class ~ ., data = PD.train, method = "rpart",
+               trControl = ctrl, tuneGrid = hyperparameters)
+
+importance <- varImp(model)
+
+print(importance)
+
+```
+
+Based on the result of GridSearch, I could get the best Attributes which are A23, A01, A18, A22 and so on..
+
+### Improving Bagging 
+
+```{r echo=FALSE}
+# Improving Bagging 
+
+PD.new.train <- PD.train[, c(1, 22, 23, 18, 26)] 
+PD.new.test <- PD.test[, c(1, 22, 23, 18, 26)] 
+set.seed(319946955) 
+PD.new.bag = bagging(Class ~ ., data = PD.new.train, mfinal = 10)
+
+# Bagging
+set.seed(319946955) 
+PD.new.bag.predict <- predict.bagging(PD.new.bag, newdata = PD.new.test)
+PD.new.bag.predict_factor <- factor(PD.new.bag.predict$class, levels = levels(PD.new.test$Class))
+PD.new.bag.conf_matrix <- confusionMatrix(data = PD.new.bag.predict_factor, reference = PD.new.test$Class)
+
+PD.new.bag.conf_matrix
+
+PD.new.bag.accuracy <- PD.new.bag.conf_matrix$overall["Accuracy"]
+print(paste("Bagging Accuracy:", PD.new.bag.accuracy))
+
+
+```
+When considering my decision, several factors played a crucial role. I prioritized AUC, accuracy, and sensitivity as the most important factors. These metrics were considered comprehensively when comparing decision tree, random forest, and bagging models.
+
+In my effort to improve the bagging model, I decided to exclude certain attributes from the dataset, namely A03, A05, A07, A09, A11, A13, A16, and A19, which were deemed unnecessary. Instead, I opted to use only columns 1, 18, 22, and 23 for bagging. This decision was influenced by examining the importance scores from the original bagging model. I noticed that many attributes had importance scores of 0, so I disregarded them. Conversely, columns 1, 18, 22, and 23 had notably high importance scores, leading me to select them for the improved bagging model.
+
+Ultimately, my decision to focus on improving the bagging model was driven by the observation that, despite improvements to the decision tree and random forest models, they still fell short of the accuracy achieved by the original bagging model. Therefore, enhancing the original bagging model seemed to offer the closest path to achieving the best tree-based classification.
+
+
+# Question 11
+
+```{r message=FALSE, warning=FALSE}
+# Question 11
+
+library(neuralnet)
+
+PD.neural.train <- PD.train[, c(1, 22, 23, 18, 26)] 
+PD.neural.test <- PD.test[, c(1, 22, 23, 18, 26)] 
+
+pttrain = as.data.frame(PD.neural.train)
+
+set.seed(319946955)
+trial <- neuralnet(Class ~., pttrain, hidden = 5, threshold = 0.05)
+```
+
+``````{r message = TRUE}
+plot(trial, rep = 'best')
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(pROC)
+
+PD.neural.predict = predict(trial, PD.neural.test)
+
+labels <- c('0','1')
+
+prediction_checker <- labels[max.col(PD.neural.predict)]
+
+PD.neural.conf_matrix <- table(observed = PD.neural.test$Class, predicted = prediction_checker)
+
+PD.neural.conf_matrix
+
+# accuracy calculate
+PD.neural.accuracy <- sum(diag(PD.neural.conf_matrix)) / sum(PD.neural.conf_matrix)
+
+cat("ANN accuracy : ", PD.neural.accuracy)
+
+classifiers_name <- c("Decision Tree", "Naive Bayes", "Bagging", "Boosting", "Random Forest", "ANN")
+accuracy_of_classifiers <- c(PD.tree.accuracy,
+                             PD.nav.accuracy,
+                             PD.bag.accuracy,
+                             PD.boost.accuracy,
+                             PD.randomforest.accuracy,
+                             PD.neural.accuracy)
+accuracy_of_classifiers_rounded <- round(accuracy_of_classifiers, 4)
+classifier_table2 <- data.frame(Classifier = classifiers_name, Accuracy = accuracy_of_classifiers_rounded)
+
+classifier_table2
+```
+I chose the attributes that is highly related with output, which are A01, A22, A23 and A18. And I implemented ANN  with hidden = 5.
+The accuracy of ANN was 0.8008 which is consider high. However, Our original baggin model's accuracy was still remained the highest which is 0.8133.
+
+
+# Question 12
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+PD.svm <- svm(Class ~ ., PD.train, kernel = "linear")
+
+PD.svm.predict = predict(PD.svm, PD.test)
+
+PD.svm.conf_matrix <- table(actual = PD.test$Class, predicted = PD.svm.predict)
+
+PD.svm.accuracy <- sum(diag(PD.svm.conf_matrix)) / sum(PD.svm.conf_matrix)
+
+classifiers_name <- c("Decision Tree", "Naive Bayes", "Bagging", "Boosting", "Random Forest", "ANN", "SVM")
+accuracy_of_classifiers <- c(PD.tree.accuracy,
+                             PD.nav.accuracy,
+                             PD.bag.accuracy,
+                             PD.boost.accuracy,
+                             PD.randomforest.accuracy,
+                             PD.neural.accuracy,
+                             PD.svm.accuracy)
+accuracy_of_classifiers_rounded <- round(accuracy_of_classifiers, 4)
+classifier_table2 <- data.frame(Classifier = classifiers_name, Accuracy = accuracy_of_classifiers_rounded)
+``` 
+
+
+
+```{r warning=FALSE}
+library(e1071)
+library(ROCR)
+
+# SVM training
+PD.svm <- svm(Class ~ ., data = PD.train, kernel = "linear", probability = TRUE)
+
+# SVM predict
+PD.svm.predict <- predict(PD.svm, PD.test, probability = TRUE)
+
+# probability
+PD.svm.prob <- attr(PD.svm.predict, "probabilities")
+
+# progression for ROC in SVM
+PDSVM.pred <- ROCR::prediction(PD.svm.prob[,2], PD.test$Class)
+PDSVM.perf <- ROCR::performance(PDSVM.pred, "tpr", "fpr")
+
+#AUC - SVM
+PDSVM.auc_value <- performance(PDSVM.pred, "auc")
+PDSVM.auc <- PDSVM.auc_value@y.values[[1]]
+PDSVM.auc 
+
+# ROC visualization
+plot(PDSVM.perf, col = "blue", main = "ROC Curve for SVM")
+abline(a = 0, b = 1, lty = 2, col = "red")
+
+```
+```{r}
+
+classifier_table2
+
+```
+
+I used SVM model for new classifier to the data and tested the performance in the same way as for previous models. (SVM was not covered in the course.) I used e1071 and ROCR library.
+
+I was able to understand SVM in detail through (https://www.datacamp.com/tutorial/support-vector-machines-r).
+
+SVM stands for Support Vector Machine, which is a type of machine learning algorithm used for pattern recognition. It is a supervised learning model that, based on a dataset, creates a linear classification model to determine which category new data belongs to. The classification model uses an algorithm to find the boundary with the largest margin.
+
+Additionally, we achieved an accuracy of 0.7822 and an AUC value of 0.7622392 as a result.
+
+
+# Appendix
+
+``` {r eval=FALSE}
+
+
+library(tree)
+library(e1071)
+library(ROCR)
+library(rpart)
+library(rgl)
+library(plyr)
+library(adabag)
+library(randomForest)
+library(caret)
+library(ggplot2)
+#library(neuralnet)
+
+rm(list = ls())
+Phish <- read.csv("PhishingData.csv")
+set.seed(319946955) # Your Student ID is the random seed
+L <- as.data.frame(c(1:50))
+L <- L[sample(nrow(L), 10, replace = FALSE),]
+Phish <- Phish[(Phish$A01 %in% L),]
+PD <- Phish[sample(nrow(Phish), 2000, replace = FALSE),] # sample of 2000 rows
+
+# Question 1
+
+count_0 <- sum(PD$Class == 0)
+count_1 <- sum(PD$Class == 1)
+
+# checking the ratio
+ratio_0 <- count_0 / length(PD$Class)
+ratio_1 <- count_1 / length(PD$Class)
+cat("Ratio of Class 1 (proportion of phishing sites to legitimate sites) :", ratio_1, "\n")
+
+# making bar plot
+barplot(c(ratio_0, ratio_1), names.arg = c("Class 0", "Class 1"), ylim = c(0,1),
+        main = "Ratio of Class 0 and Class 1", ylab = "Ratio", col = c("skyblue", "salmon"))
+
+# Question 2, pre-proessing
+
+PD_filtered <- PD[complete.cases(PD), ]
+PD_filtered$Class <- as.factor(PD_filtered$Class)
+
+dim(PD_filtered)
+
+
+# Question 3
+set.seed(319946955)
+train.row = sample(1:nrow(PD_filtered), 0.7*nrow(PD_filtered))
+PD.train = PD_filtered[train.row,]
+PD.test = PD_filtered[-train.row,]
+
+
+# Question 4
+
+# Decision Tree
+set.seed(319946955)
+PD.tree = tree(Class ~., data = PD.train)
+
+# Naive Bayes
+set.seed(319946955)
+PD.nav = naiveBayes(Class ~ . , data = PD.train)
+
+set.seed(319946955)  
+sub <- sample(1:nrow(PD.train), 750, replace = FALSE)
+
+# Bagging 
+set.seed(319946955)  
+PD.bag = bagging(Class ~ ., data = PD.train, mfinal = 10)
+
+# Boosting
+set.seed(319946955)  
+PD.boost <- boosting(Class ~ ., data = PD.train, mfinal = 10)
+
+# Random Forest
+set.seed(319946955)  
+PD.randomforest <- randomForest(Class ~., data=PD.train )
+
+
+# Question 5
+
+# Decision Tree
+PD.tree.predict <- predict(PD.tree, PD.test, type = "class")
+PD.tree.conf_matrix <- confusionMatrix(data = PD.tree.predict, reference = PD.test$Class)
+
+PD.tree.conf_matrix
+
+PD.tree.accuracy <- PD.tree.conf_matrix$overall["Accuracy"]
+# Naive Bayes
+PD.nav.predict <- predict(PD.nav, PD.test)
+PD.nav.conf_matrix_nb <- confusionMatrix(data = PD.nav.predict, reference = PD.test$Class)
+
+PD.nav.conf_matrix_nb
+
+PD.nav.accuracy <- PD.nav.conf_matrix_nb$overall["Accuracy"]
+
+# Bagging
+PD.bag.predict <- predict.bagging(PD.bag, newdata = PD.test)
+PD.bag.predict_factor <- factor(PD.bag.predict$class, levels = levels(PD.test$Class))
+PD.bag.conf_matrix <- confusionMatrix(data = PD.bag.predict_factor, reference = PD.test$Class)
+
+PD.bag.conf_matrix
+
+PD.bag.accuracy <- PD.bag.conf_matrix$overall["Accuracy"]
+# Boosting 
+PD.boost.predict <- predict.boosting(PD.boost, newdata = PD.test)
+PD.boost.predict_factor <- factor(PD.boost.predict$class, levels = levels(PD.test$Class))
+PD.boost.conf_matrix <- confusionMatrix(data = PD.boost.predict_factor, reference = PD.test$Class)
+PD.boost.accuracy <- PD.boost.conf_matrix$overall["Accuracy"]
+
+PD.boost.conf_matrix
+# Random forest
+PD.randomforest.predict <- predict(PD.randomforest,PD.test)
+PD.randomforest.conf_matrix <- confusionMatrix(data = PD.randomforest.predict, reference = PD.test$Class)
+
+PD.randomforest.conf_matrix
+
+PD.randomforest.accuracy <- PD.randomforest.conf_matrix$overall["Accuracy"]
+classifiers_name <- c("Decision Tree", "Naive Bayes", "Bagging", "Boosting", "Random Forest")
+accuracy_of_classifiers <- c(PD.tree.accuracy,
+                             PD.nav.accuracy,
+                             PD.bag.accuracy,
+                             PD.boost.accuracy,
+                             PD.randomforest.accuracy)
+accuracy_of_classifiers_rounded <- round(accuracy_of_classifiers, 4)
+classifier_table <- data.frame(Classifier = classifiers_name, Accuracy = accuracy_of_classifiers_rounded)
+
+classifier_table
+classifier_table_copy = classifier_table
+
+# Question 7
+
+
+classifiers_name <- c("Decision Tree", "Naive Bayes", "Bagging", "Boosting", "Random Forest")
+accuracy_of_classifiers <- c(PD.tree.accuracy,
+                             PD.nav.accuracy,
+                             PD.bag.accuracy,
+                             PD.boost.accuracy,
+                             PD.randomforest.accuracy)
+confidence_of_classifiers <- c(PD.tree.sensitivity,
+                               PD.nav.sensitivity,
+                               PD.bag.sensitivity,
+                               PD.boost.sensitivity,
+                               PD.randomforest.sensitivity)
+AUC_table <- c(PD.tree.auc,
+                               PD.nav.auc,
+                               PDBA.auc,
+                               PDBO.auc,
+                               PDRF.auc)
+accuracy_of_classifiers_rounded <- round(accuracy_of_classifiers, 4)
+confidence_of_classifiers_rounded <- round(confidence_of_classifiers, 4)
+classifier_table <- data.frame(Classifier = classifiers_name,
+                               Accuracy = accuracy_of_classifiers_rounded,
+                               Confidence = confidence_of_classifiers_rounded,
+                               AUC = AUC_table)
+
+
+classifier_table
+
+# Question 9
+
+PD.new.train <- PD.train[, c(1, 22, 23, 18, 26)] 
+PD.new.test <- PD.test[, c(1, 22, 23, 18, 26)] 
+
+
+set.seed(319946955)
+PD.new.tree <-tree(Class ~., data = PD.new.train)
+
+plot(PD.new.tree)
+text(PD.new.tree)
+title(main = "New Decision Tree")
+
+# Decision Tree
+PD.new.tree.predict <- predict(PD.new.tree, PD.new.test, type = "class")
+PD.new.tree.conf_matrix <- confusionMatrix(data = PD.new.tree.predict, reference = PD.new.test$Class)
+
+PD.new.tree.conf_matrix
+
+PD.new.tree.accuracy <- PD.new.tree.conf_matrix$overall["Accuracy"]
+print(paste("NEW Decision Tree Accuracy:", PD.new.tree.accuracy))
+
+# Question 10
+# Question 10 - Gridsearch
+
+# initialize the hyperparameters value
+hyperparameters <- data.frame(cp = c(0.01, 0.05, 0.1, 0.2, 0.5))
+
+# how are we going to do the train
+ctrl <- trainControl(method = "cv", number = 5)
+
+# gridsearch
+model <- train(Class ~ ., data = PD.train, method = "rpart",
+               trControl = ctrl, tuneGrid = hyperparameters)
+
+importance <- varImp(model)
+
+print(importance)
+
+# Improving Bagging 
+
+PD.new.train <- PD.train[, c(1, 22, 23, 18, 26)] 
+PD.new.test <- PD.test[, c(1, 22, 23, 18, 26)] 
+set.seed(319946955) 
+PD.new.bag = bagging(Class ~ ., data = PD.new.train, mfinal = 10)
+
+# Bagging
+set.seed(319946955) 
+PD.new.bag.predict <- predict.bagging(PD.new.bag, newdata = PD.new.test)
+PD.new.bag.predict_factor <- factor(PD.new.bag.predict$class, levels = levels(PD.new.test$Class))
+PD.new.bag.conf_matrix <- confusionMatrix(data = PD.new.bag.predict_factor, reference = PD.new.test$Class)
+
+PD.new.bag.conf_matrix
+
+PD.new.bag.accuracy <- PD.new.bag.conf_matrix$overall["Accuracy"]
+print(paste("Bagging Accuracy:", PD.new.bag.accuracy))
+
+# Question 11
+# Question 11
+
+library(neuralnet)
+
+PD.neural.train <- PD.train[, c(1, 22, 23, 18, 26)] 
+PD.neural.test <- PD.test[, c(1, 22, 23, 18, 26)] 
+
+pttrain = as.data.frame(PD.neural.train)
+
+set.seed(319946955)
+trial <- neuralnet(Class ~., pttrain, hidden = 5, threshold = 0.05)
+
+
+plot(trial)
+
+library(dplyr)
+library(pROC)
+
+PD.neural.predict = predict(trial, PD.neural.test)
+
+labels <- c('0','1')
+
+prediction_checker <- labels[max.col(PD.neural.predict)]
+
+PD.neural.conf_matrix <- table(observed = PD.neural.test$Class, predicted = prediction_checker)
+
+PD.neural.conf_matrix
+
+# accuracy calculate
+PD.neural.accuracy <- sum(diag(PD.neural.conf_matrix)) / sum(PD.neural.conf_matrix)
+
+cat("ANN accuracy : ", PD.neural.accuracy)
+
+classifiers_name <- c("Decision Tree", "Naive Bayes", "Bagging", "Boosting", "Random Forest", "ANN")
+accuracy_of_classifiers <- c(PD.tree.accuracy,
+                             PD.nav.accuracy,
+                             PD.bag.accuracy,
+                             PD.boost.accuracy,
+                             PD.randomforest.accuracy,
+                             PD.neural.accuracy)
+accuracy_of_classifiers_rounded <- round(accuracy_of_classifiers, 4)
+classifier_table2 <- data.frame(Classifier = classifiers_name, Accuracy = accuracy_of_classifiers_rounded)
+
+classifier_table2
+
+# Question 12
+
+PD.svm <- svm(Class ~ ., PD.train, kernel = "linear")
+
+PD.svm.predict = predict(PD.svm, PD.test)
+
+PD.svm.conf_matrix <- table(actual = PD.test$Class, predicted = PD.svm.predict)
+
+PD.svm.accuracy <- sum(diag(PD.svm.conf_matrix)) / sum(PD.svm.conf_matrix)
+
+classifiers_name <- c("Decision Tree", "Naive Bayes", "Bagging", "Boosting", "Random Forest", "ANN", "SVM")
+accuracy_of_classifiers <- c(PD.tree.accuracy,
+                             PD.nav.accuracy,
+                             PD.bag.accuracy,
+                             PD.boost.accuracy,
+                             PD.randomforest.accuracy,
+                             PD.neural.accuracy,
+                             PD.svm.accuracy)
+accuracy_of_classifiers_rounded <- round(accuracy_of_classifiers, 4)
+classifier_table2 <- data.frame(Classifier = classifiers_name, Accuracy = accuracy_of_classifiers_rounded)
+
+```
